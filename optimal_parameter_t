@@ -1,1 +1,83 @@
-optimization of time parameter $t$ for ConGra
+
+import numpy as np
+import networkx as nx
+import csv
+from scipy import linalg
+from copy import deepcopy
+from scipy.linalg import expm, sinm, cosm
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+from sklearn.metrics.pairwise import cosine_similarity
+from scipy.stats import kendalltau
+from scipy.spatial.distance import cityblock
+from scipy.stats import spearmanr
+from scipy.stats import pearsonr
+
+def getGraph():
+    G = nx.Graph()
+    with open('email.csv', 'r') as f:
+        csvFile = csv.reader(f)
+        for item in csvFile:
+            u, v = int(item[0]), int(item[1])
+            try:
+                G[u][v]['weight'] = 1  # weight equal to 1, whether it can be represented as probability amplitude ?
+            except KeyError:
+                G.add_edge(u, v, weight = 1)
+            try:
+                G[v][u]['weight'] = 1
+            except KeyError:
+                G.add_edge(v, u, weight = 1)
+    return G
+
+def getSIRvalues():
+    sir = []
+    with open('SIR.csv', 'r') as f:
+        csvFile = csv.reader(f)
+        for item in csvFile:
+            sir.append(float(item[1]))
+    return sir
+
+def normalizedData(data):
+    min_val = min(data)
+    max_val = max(data)
+    return [(x - min_val) / (max_val - min_val) for x in data]
+
+if __name__ == '__main__':
+    G = getGraph()
+    sir = getSIRvalues()
+    cosine, kendall_tau, kendall_p, euclidean, manhattan, spearmanS, spearmanP, pearsonR, pearsonP = (
+        [], [], [], [], [], [], [], [], [])
+
+    size = np.arange(0.01, 0.5, 0.02)
+    for index in tqdm(size):
+        congravityValue = ConGravity(G, index)
+        cosine.append(cosine_similarity([sir], [congravityValue])[0][0])
+        tau, tau_p_value = kendalltau(sir, congravityValue)
+        kendall_tau.append(tau)
+        kendall_p.append(tau_p_value)
+        euclidean.append(linalg.norm((sir-congravityValue)))
+        manhattan.append(cityblock(sir, congravityValue))
+        spear_S, spear_p_value = spearmanr(sir, congravityValue)
+        spearmanS.append(spear_S)
+        spearmanP.append(spear_p_value)
+        pear_r, pear_p = pearsonr(sir, congravityValue)
+        pearsonR.append(pear_r)
+        pearsonP.append(pear_p)
+
+    plt.figure(figsize=(4.5, 3))
+    plt.plot(size, kendall_tau, '-*', label=r'Kendall$\ \tau$')
+    plt.plot(size, kendall_p, '-.', label='Kendall_p')
+    plt.plot(size, cosine, '-s', label='Cosine')
+    plt.plot(size, normalizedData(euclidean), '-h', label='Euclidean')
+    plt.plot(size, normalizedData(manhattan), '-^', label='Manhattan')
+    plt.plot(size, spearmanS, '-o', label='SpearmanS')
+    plt.plot(size, spearmanP, ':', label='Spearman_p')
+    plt.plot(size, pearsonR, '-o', label='Pearson_r')
+    plt.plot(size, pearsonP, '--', label='Pearson_p')
+    plt.plot(size, np.full_like(size, 0.05), '-', label='critical-p=0.05')
+
+    plt.ylabel("Statistical values")
+    plt.xlabel('$t$')
+    plt.tight_layout()
+    plt.show()
+
